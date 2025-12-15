@@ -2,14 +2,14 @@
 #include <fstream>
 #include <system_error>
 
-namespace booking {
+namespace NBooking {
 
-    FileJsonStorage::FileJsonStorage(std::filesystem::path snapshot_path, std::filesystem::path journal_path)
-        : snapshot_path_(std::move(snapshot_path))
-        , journal_path_(std::move(journal_path)) {
+    TFileJsonStorage::TFileJsonStorage(std::filesystem::path snapshot_path, std::filesystem::path journal_path)
+        : SnapshotPath(std::move(snapshot_path))
+        , JournalPath(std::move(journal_path)) {
     }
 
-    void FileJsonStorage::atomicWrite(const std::filesystem::path& path, const nlohmann::json& j) {
+    void TFileJsonStorage::AtomicWrite(const std::filesystem::path& path, const nlohmann::json& j) {
         std::error_code ec;
         auto tmp = path;
         tmp += ".tmp";
@@ -28,20 +28,20 @@ namespace booking {
         }
     }
 
-    void FileJsonStorage::saveState(const nlohmann::json& snapshot) {
-        std::scoped_lock lk(mutex_);
-        if (!snapshot_path_.parent_path().empty()) {
-            std::filesystem::create_directories(snapshot_path_.parent_path());
+    void TFileJsonStorage::SaveState(const nlohmann::json& snapshot) {
+        std::scoped_lock lk(Mutex_);
+        if (!SnapshotPath.parent_path().empty()) {
+            std::filesystem::create_directories(SnapshotPath.parent_path());
         }
-        atomicWrite(snapshot_path_, snapshot);
+        AtomicWrite(SnapshotPath, snapshot);
     }
 
-    nlohmann::json FileJsonStorage::loadState() {
-        std::scoped_lock lk(mutex_);
-        if (!std::filesystem::exists(snapshot_path_)) {
+    nlohmann::json TFileJsonStorage::LoadState() {
+        std::scoped_lock lk(Mutex_);
+        if (!std::filesystem::exists(SnapshotPath)) {
             return nlohmann::json::object();
         }
-        std::ifstream ifs(snapshot_path_);
+        std::ifstream ifs(SnapshotPath);
         if (!ifs) {
             return nlohmann::json::object();
         }
@@ -50,25 +50,25 @@ namespace booking {
         return j;
     }
 
-    void FileJsonStorage::appendJournal(const nlohmann::json& entry) {
-        std::scoped_lock lk(mutex_);
-        if (!journal_path_.parent_path().empty()) {
-            std::filesystem::create_directories(journal_path_.parent_path());
+    void TFileJsonStorage::AppendJournal(const nlohmann::json& entry) {
+        std::scoped_lock lk(Mutex_);
+        if (!JournalPath.parent_path().empty()) {
+            std::filesystem::create_directories(JournalPath.parent_path());
         }
-        std::ofstream ofs(journal_path_, std::ios::app);
+        std::ofstream ofs(JournalPath, std::ios::app);
         if (!ofs) {
-            throw std::runtime_error("Cannot open journal file for append: " + journal_path_.string());
+            throw std::runtime_error("Cannot open journal file for append: " + JournalPath.string());
         }
         ofs << entry.dump() << '\n';
     }
 
-    std::vector<nlohmann::json> FileJsonStorage::loadJournal() {
-        std::scoped_lock lk(mutex_);
+    std::vector<nlohmann::json> TFileJsonStorage::LoadJournal() {
+        std::scoped_lock lk(Mutex_);
         std::vector<nlohmann::json> out;
-        if (!std::filesystem::exists(journal_path_)) {
+        if (!std::filesystem::exists(JournalPath)) {
             return out;
         }
-        std::ifstream ifs(journal_path_);
+        std::ifstream ifs(JournalPath);
         std::string line;
         while (std::getline(ifs, line)) {
             if (line.empty()) {
@@ -82,4 +82,4 @@ namespace booking {
         return out;
     }
 
-} // namespace booking
+} // namespace NBooking

@@ -1,128 +1,128 @@
 #include <BookingManager.hpp>
 
-namespace booking {
+namespace NBooking {
 
-    BookingManager::BookingManager(std::shared_ptr<IRepository> repo,
-                                   std::shared_ptr<IStorage> storage,
-                                   std::shared_ptr<IConflictStrategy> strategy)
-        : repo_(std::move(repo))
-        , storage_(std::move(storage))
-        , strategy_(std::move(strategy)) {
+    TBookingManager::TBookingManager(std::shared_ptr<IRepository> repo,
+                                     std::shared_ptr<IStorage> storage,
+                                     std::shared_ptr<IConflictStrategy> strategy)
+        : Repo(std::move(repo))
+        , Storage(std::move(storage))
+        , Strat(std::move(strategy)) {
     }
 
-    void BookingManager::pushUndo(std::unique_ptr<ICommand> cmd) {
-        std::lock_guard lk(history_mutex_);
-        undo_stack_.push_back(std::move(cmd));
-        if (undo_stack_.size() > UNDO_LIMIT) {
-            undo_stack_.pop_front();
+    void TBookingManager::PushUndo(std::unique_ptr<ICommand> cmd) {
+        std::lock_guard lk(HistoryMutex_);
+        UndoStack.push_back(std::move(cmd));
+        if (UndoStack.size() > UNDO_LIMIT) {
+            UndoStack.pop_front();
         }
-        redo_stack_.clear();
+        RedoStack.clear();
     }
 
-    std::optional<std::string> BookingManager::undo() {
-        std::unique_lock lk(history_mutex_);
-        if (undo_stack_.empty()) {
+    std::optional<std::string> TBookingManager::Undo() {
+        std::unique_lock lk(HistoryMutex_);
+        if (UndoStack.empty()) {
             return std::nullopt;
         }
-        auto cmd = std::move(undo_stack_.back());
-        undo_stack_.pop_back();
-        std::string desc = cmd->describe();
-        cmd->undo();
-        redo_stack_.push_back(std::move(cmd));
+        auto cmd = std::move(UndoStack.back());
+        UndoStack.pop_back();
+        std::string desc = cmd->Describe();
+        cmd->Undo();
+        RedoStack.push_back(std::move(cmd));
         return std::optional<std::string>(std::string("Undid: ") + desc);
     }
 
-    std::optional<std::string> BookingManager::redo() {
-        std::unique_lock lk(history_mutex_);
-        if (redo_stack_.empty()) {
+    std::optional<std::string> TBookingManager::Redo() {
+        std::unique_lock lk(HistoryMutex_);
+        if (RedoStack.empty()) {
             return std::nullopt;
         }
-        auto cmd = std::move(redo_stack_.back());
-        redo_stack_.pop_back();
-        std::string desc = cmd->describe();
-        cmd->execute();
-        undo_stack_.push_back(std::move(cmd));
+        auto cmd = std::move(RedoStack.back());
+        RedoStack.pop_back();
+        std::string desc = cmd->Describe();
+        cmd->Execute();
+        UndoStack.push_back(std::move(cmd));
         return std::optional<std::string>(std::string("Redid: ") + desc);
     }
 
-    std::optional<Booking> BookingManager::getBooking(BookingId id) {
-        return repo_->getBooking(id);
+    std::optional<TBooking> TBookingManager::GetBooking(BookingId id) {
+        return Repo->GetBooking(id);
     }
 
-    std::vector<Booking> BookingManager::listBookings(RoomId room,
-                                                      std::chrono::system_clock::time_point from,
-                                                      std::chrono::system_clock::time_point to) {
-        std::vector<Booking> out;
-        auto all = repo_->listAll();
+    std::vector<TBooking> TBookingManager::ListBookings(RoomId room,
+                                                        std::chrono::system_clock::time_point from,
+                                                        std::chrono::system_clock::time_point to) {
+        std::vector<TBooking> out;
+        auto all = Repo->ListAll();
         for (auto& b : all) {
-            if (b.room_id != room) {
+            if (b.RoomIdInternal != room) {
                 continue;
             }
-            auto inst = generateInstances(b, from, to);
+            auto inst = GenerateInstances(b, from, to);
             out.insert(out.end(), inst.begin(), inst.end());
         }
         return out;
     }
 
-    bool BookingManager::canModify(const User& actor, const Booking& target) const {
-        if (actor.role == Role::Admin) {
+    bool TBookingManager::CanModify(const TUser& actor, const TBooking& target) const {
+        if (actor.Role == ERole::Admin) {
             return true;
         }
-        if (actor.role == Role::Manager) {
+        if (actor.Role == ERole::Manager) {
             return true;
         }
-        if (actor.role == Role::User) {
-            return actor.id == target.user_id;
+        if (actor.Role == ERole::User) {
+            return actor.Id == target.UserIdInternal;
         }
         return false;
     }
 
-    bool BookingManager::canCreate(const User& actor) const {
-        return actor.role == Role::Admin ||
-               actor.role == Role::Manager ||
-               actor.role == Role::User;
+    bool TBookingManager::CanCreate(const TUser& actor) const {
+        return actor.Role == ERole::Admin ||
+               actor.Role == ERole::Manager ||
+               actor.Role == ERole::User;
     }
 
-    bool BookingManager::canCancel(const User& actor, const Booking& target) const {
-        if (actor.role == Role::Admin) {
+    bool TBookingManager::CanCancel(const TUser& actor, const TBooking& target) const {
+        if (actor.Role == ERole::Admin) {
             return true;
         }
-        if (actor.role == Role::Manager) {
+        if (actor.Role == ERole::Manager) {
             return true;
         }
-        if (actor.role == Role::User) {
-            return actor.id == target.user_id;
+        if (actor.Role == ERole::User) {
+            return actor.Id == target.UserIdInternal;
         }
         return false;
     }
 
-    std::optional<BookingId> BookingManager::createBooking(const Booking& req, const User& actor) {
-        if (!canCreate(actor)) {
+    std::optional<BookingId> TBookingManager::CreateBooking(const TBooking& req, const TUser& actor) {
+        if (!CanCreate(actor)) {
             throw std::runtime_error("Access denied: create");
         }
 
-        std::lock_guard lk(mutex_);
+        std::lock_guard lk(Mutex_);
 
         using namespace std::chrono;
 
-        auto from = req.start - hours(24);
-        auto to = req.recurrence.until
-                      ? (*req.recurrence.until + hours(1))
-                      : (req.start + hours(24 * 365));
+        auto from = req.Start - hours(24);
+        auto to = req.Recurrence.Until
+                      ? (*req.Recurrence.Until + hours(1))
+                      : (req.Start + hours(24 * 365));
 
-        auto requestedInst = generateInstances(req, from, to);
+        auto requestedInst = GenerateInstances(req, from, to);
 
         if (requestedInst.empty()) {
             requestedInst.push_back(req);
         }
 
-        std::vector<Booking> existingInst;
-        for (auto& ex : repo_->listAll()) {
-            bool related = (ex.room_id == req.room_id);
+        std::vector<TBooking> existingInst;
+        for (auto& ex : Repo->ListAll()) {
+            bool related = (ex.RoomIdInternal == req.RoomIdInternal);
             if (!related) {
-                for (auto& r : ex.resources) {
-                    for (auto& rr : req.resources) {
-                        if (r.id == rr.id) {
+                for (auto& r : ex.Resources) {
+                    for (auto& rr : req.Resources) {
+                        if (r.Id == rr.Id) {
                             related = true;
                         }
                     }
@@ -132,116 +132,116 @@ namespace booking {
                 continue;
             }
 
-            auto insts = generateInstances(ex, from, to);
+            auto insts = GenerateInstances(ex, from, to);
             existingInst.insert(existingInst.end(), insts.begin(), insts.end());
         }
 
         for (auto& inst : requestedInst) {
-            auto res = strategy_->resolve(inst, existingInst, actor);
+            auto res = Strat->Resolve(inst, existingInst, actor);
             if (!res.ok) {
                 return std::nullopt;
             }
 
-            if (res.suggested_start) {
-                Booking adjusted = req;
-                auto dur = adjusted.end - adjusted.start;
-                adjusted.start = *res.suggested_start;
-                adjusted.end = adjusted.start + dur;
+            if (res.SuggestedStart) {
+                TBooking adjusted = req;
+                auto dur = adjusted.End - adjusted.Start;
+                adjusted.Start = *res.SuggestedStart;
+                adjusted.End = adjusted.Start + dur;
 
-                auto cmd = std::make_unique<CreateBookingCommand>(*repo_, adjusted);
-                cmd->execute();
+                auto cmd = std::make_unique<TCreateBookingCommand>(*Repo, adjusted);
+                cmd->Execute();
                 auto id = cmd->id();
-                pushUndo(std::move(cmd));
+                PushUndo(std::move(cmd));
                 return id;
             }
         }
 
-        auto cmd = std::make_unique<CreateBookingCommand>(*repo_, req);
-        cmd->execute();
+        auto cmd = std::make_unique<TCreateBookingCommand>(*Repo, req);
+        cmd->Execute();
         auto id = cmd->id();
-        pushUndo(std::move(cmd));
+        PushUndo(std::move(cmd));
         return id;
     }
 
-    std::optional<BookingId> BookingManager::createBooking(const CreateRequest& req) {
-        return createBooking(req.booking, req.actor);
+    std::optional<BookingId> TBookingManager::CreateBooking(const TCreateRequest& req) {
+        return CreateBooking(req.Booking, req.Actor);
     }
 
-    bool BookingManager::modifyBooking(const ChangeRequest& req) {
-        std::lock_guard lk(mutex_);
+    bool TBookingManager::ModifyBooking(const TChangeRequest& req) {
+        std::lock_guard lk(Mutex_);
 
-        auto old = repo_->getBooking(req.id);
+        auto old = Repo->GetBooking(req.Id);
         if (!old) {
             return false;
         }
 
-        if (!canModify(req.actor, *old)) {
+        if (!CanModify(req.Actor, *old)) {
             throw std::runtime_error("Access denied: modify");
         }
 
-        Booking updated = *old;
-        if (req.title) {
-            updated.title = *req.title;
+        TBooking updated = *old;
+        if (req.Title) {
+            updated.Title = *req.Title;
         }
-        if (req.description) {
-            updated.description = *req.description;
+        if (req.Description) {
+            updated.Description = *req.Description;
         }
-        if (req.start) {
-            updated.start = *req.start;
+        if (req.Start) {
+            updated.Start = *req.Start;
         }
-        if (req.end) {
-            updated.end = *req.end;
+        if (req.End) {
+            updated.End = *req.End;
         }
 
-        auto cmd = std::make_unique<UpdateBookingCommand>(*repo_, *old, updated);
-        cmd->execute();
-        pushUndo(std::move(cmd));
+        auto cmd = std::make_unique<TUpdateBookingCommand>(*Repo, *old, updated);
+        cmd->Execute();
+        PushUndo(std::move(cmd));
         return true;
     }
 
-    bool BookingManager::cancelBooking(BookingId id, const User& actor) {
-        std::lock_guard lk(mutex_);
-        auto ob = repo_->getBooking(id);
+    bool TBookingManager::CancelBooking(BookingId id, const TUser& actor) {
+        std::lock_guard lk(Mutex_);
+        auto ob = Repo->GetBooking(id);
         if (!ob) {
             return false;
         }
-        if (!canCancel(actor, *ob)) {
+        if (!CanCancel(actor, *ob)) {
             throw std::runtime_error("Access denied: cancel");
         }
 
-        auto cmd = std::make_unique<RemoveBookingCommand>(*repo_, id);
-        cmd->execute();
-        pushUndo(std::move(cmd));
+        auto cmd = std::make_unique<TRemoveBookingCommand>(*Repo, id);
+        cmd->Execute();
+        PushUndo(std::move(cmd));
         return true;
     }
 
-    void BookingManager::setStrategy(std::shared_ptr<IConflictStrategy> s) {
-        std::lock_guard lk(mutex_);
-        strategy_ = s;
+    void TBookingManager::SetStrategy(std::shared_ptr<IConflictStrategy> s) {
+        std::lock_guard lk(Mutex_);
+        Strat = s;
     }
 
-    std::vector<BookingId> BookingManager::importFromCalendar(
+    std::vector<BookingId> TBookingManager::ImportFromCalendar(
         ICalendarAdapter& adapter,
         std::chrono::system_clock::time_point from,
         std::chrono::system_clock::time_point to,
-        const User& actor) {
-        if (actor.role != Role::Admin && actor.role != Role::Manager) {
+        const TUser& actor) {
+        if (actor.Role != ERole::Admin && actor.Role != ERole::Manager) {
             throw std::runtime_error("Access denied: import");
         }
 
         std::vector<BookingId> imported;
-        auto events = adapter.fetch(from, to);
+        auto events = adapter.Fetch(from, to);
 
         for (auto const& ev : events) {
-            Booking b;
-            b.room_id = ev.room_id;
-            b.user_id = ev.user_id;
-            b.start = ev.start;
-            b.end = ev.end;
-            b.title = ev.title;
-            b.description = ev.description;
+            TBooking b;
+            b.RoomIdInternal = ev.RoomIdInternal;
+            b.UserIdInternal = ev.UserIdInternal;
+            b.Start = ev.Start;
+            b.End = ev.End;
+            b.Title = ev.Title;
+            b.Description = ev.Description;
 
-            if (auto id = createBooking(b, actor)) {
+            if (auto id = CreateBooking(b, actor)) {
                 imported.push_back(*id);
             }
         }
@@ -249,4 +249,4 @@ namespace booking {
         return imported;
     }
 
-} // namespace booking
+} // namespace NBooking

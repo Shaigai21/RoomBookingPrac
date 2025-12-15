@@ -3,51 +3,51 @@
 #include <optional>
 #include <vector>
 
-struct ConflictResolutionResult {
+struct TConflictResolutionResult {
     bool ok;
-    std::optional<std::string> message;
+    std::optional<std::string> Message;
     // For auto-bump: suggested new start time
-    std::optional<std::chrono::system_clock::time_point> suggested_start;
-    std::vector<BookingId> to_preempt;
+    std::optional<std::chrono::system_clock::time_point> SuggestedStart;
+    std::vector<BookingId> ToPreempt;
 };
 
 struct IConflictStrategy {
     virtual ~IConflictStrategy() = default;
-    virtual ConflictResolutionResult resolve(const Booking& candidate, const std::vector<Booking>& existing, const User& actor) = 0;
+    virtual TConflictResolutionResult Resolve(const TBooking& candidate, const std::vector<TBooking>& existing, const TUser& actor) = 0;
 };
 
 // RejectStrategy: отказывает на первом конфликте
-struct RejectStrategy: public IConflictStrategy {
-    ConflictResolutionResult resolve(const Booking& candidate, const std::vector<Booking>& existing, const User&) override {
+struct TRejectStrategy: public IConflictStrategy {
+    TConflictResolutionResult Resolve(const TBooking& candidate, const std::vector<TBooking>& existing, const TUser&) override {
         for (auto const& e : existing) {
-            if (!(candidate.end <= e.start || candidate.start >= e.end)) {
-                return {false, std::string("Conflict with booking id ") + std::to_string(e.id), std::nullopt, {}};
+            if (!(candidate.End <= e.Start || candidate.Start >= e.End)) {
+                return {false, std::string("Conflict with booking id ") + std::to_string(e.Id), std::nullopt, {}};
             }
         }
         return {true, std::nullopt, std::nullopt, {}};
     }
 };
 
-struct AutoBumpStrategy: public IConflictStrategy {
-    ConflictResolutionResult resolve(
-        const Booking& b,
-        const std::vector<Booking>& existing,
-        const User&) override {
-        auto start = b.start;
-        auto dur = b.end - b.start;
+struct TAutoBumpStrategy: public IConflictStrategy {
+    TConflictResolutionResult Resolve(
+        const TBooking& b,
+        const std::vector<TBooking>& existing,
+        const TUser&) override {
+        auto start = b.Start;
+        auto dur = b.End - b.Start;
 
         bool moved = true;
         while (moved) {
             moved = false;
             for (auto const& e : existing) {
-                if (!(start + dur <= e.start || start >= e.end)) {
-                    start = e.end;
+                if (!(start + dur <= e.Start || start >= e.End)) {
+                    start = e.End;
                     moved = true;
                 }
             }
         }
 
-        if (start != b.start) {
+        if (start != b.Start) {
             return {true, "Auto-bumped", start, {}};
         }
         return {true, std::nullopt, std::nullopt, {}};
@@ -55,20 +55,20 @@ struct AutoBumpStrategy: public IConflictStrategy {
 };
 
 // PreemptStrategy: если actor.priority > existing.user.priority -> удаление
-struct PreemptStrategy: public IConflictStrategy {
-    ConflictResolutionResult resolve(
-        const Booking& candidate,
-        const std::vector<Booking>& existing,
-        const User& actor) override {
+struct TPreemptStrategy: public IConflictStrategy {
+    TConflictResolutionResult Resolve(
+        const TBooking& candidate,
+        const std::vector<TBooking>& existing,
+        const TUser& actor) override {
         std::vector<BookingId> to_preempt;
 
         for (auto const& e : existing) {
-            if (candidate.end <= e.start || candidate.start >= e.end) {
+            if (candidate.End <= e.Start || candidate.Start >= e.End) {
                 continue;
             }
 
-            if (actor.priority > e.owner_priority) {
-                to_preempt.push_back(e.id);
+            if (actor.Priority > e.OwnerPriority) {
+                to_preempt.push_back(e.Id);
             } else {
                 return {false, "Higher priority booking exists", std::nullopt, {}};
             }
@@ -79,23 +79,23 @@ struct PreemptStrategy: public IConflictStrategy {
 };
 
 // QuorumStrategy: Разрешаем бронирование, если число attendees >= quorum_size.
-struct QuorumStrategy: public IConflictStrategy {
-    explicit QuorumStrategy(size_t quorum_size)
-        : quorum_(quorum_size) {
+struct TQuorumStrategy: public IConflictStrategy {
+    explicit TQuorumStrategy(size_t quorum_size)
+        : Quorum(quorum_size) {
     }
-    ConflictResolutionResult resolve(const Booking& candidate, const std::vector<Booking>& existing, const User&) override {
+    TConflictResolutionResult Resolve(const TBooking& candidate, const std::vector<TBooking>& existing, const TUser&) override {
         for (auto const& e : existing) {
-            if (!(candidate.end <= e.start || candidate.start >= e.end)) {
-                if (candidate.attendees.size() >= quorum_) {
-                    return {true, std::string("Allowed by quorum (") + std::to_string(quorum_) + ")", std::nullopt, {}};
+            if (!(candidate.End <= e.Start || candidate.Start >= e.End)) {
+                if (candidate.Attendees.size() >= Quorum) {
+                    return {true, std::string("Allowed by quorum (") + std::to_string(Quorum) + ")", std::nullopt, {}};
                 }
 
-                return {false, std::string("Conflict and quorum not satisfied (need ") + std::to_string(quorum_) + ")", std::nullopt, {}};
+                return {false, std::string("Conflict and quorum not satisfied (need ") + std::to_string(Quorum) + ")", std::nullopt, {}};
             }
         }
         return {true, std::nullopt, std::nullopt, {}};
     }
 
 private:
-    size_t quorum_;
+    size_t Quorum;
 };

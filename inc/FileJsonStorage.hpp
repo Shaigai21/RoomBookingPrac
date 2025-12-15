@@ -5,20 +5,20 @@
 #include <mutex>
 #include <string>
 
-namespace booking {
+namespace NBooking {
 
-    class FileJsonStorage: public IStorage {
+    class TFileJsonStorage: public IStorage {
     public:
-        explicit FileJsonStorage(std::filesystem::path snapshot_path, std::filesystem::path journal_path);
-        void saveState(const nlohmann::json& snapshot) override;
-        nlohmann::json loadState() override;
-        void appendJournal(const nlohmann::json& entry) override;
-        std::vector<nlohmann::json> loadJournal() override;
+        explicit TFileJsonStorage(std::filesystem::path snapshot_path, std::filesystem::path journal_path);
+        void SaveState(const nlohmann::json& snapshot) override;
+        nlohmann::json LoadState() override;
+        void AppendJournal(const nlohmann::json& entry) override;
+        std::vector<nlohmann::json> LoadJournal() override;
 
     private:
-        std::filesystem::path snapshot_path_;
-        std::filesystem::path journal_path_;
-        std::mutex mutex_;
-        void atomicWrite(const std::filesystem::path& path, const nlohmann::json& j);
+        std::filesystem::path SnapshotPath;
+        std::filesystem::path JournalPath;
+        std::mutex Mutex_;
+        void AtomicWrite(const std::filesystem::path& path, const nlohmann::json& j);
     };
-} // namespace booking
+} // namespace NBooking

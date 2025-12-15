@@ -3,246 +3,246 @@
 #include <optional>
 #include "models.hpp"
 
-namespace booking {
+namespace NBooking {
 
     struct IRepository {
         virtual ~IRepository() = default;
-        virtual BookingId createBooking(const Booking& b) = 0;
-        virtual void updateBooking(const Booking& b) = 0;
-        virtual void removeBooking(BookingId id) = 0;
-        virtual std::optional<Booking> getBooking(BookingId id) = 0;
-        virtual std::vector<Booking> listAll() = 0;
+        virtual BookingId CreateBooking(const TBooking& b) = 0;
+        virtual void UpdateBooking(const TBooking& b) = 0;
+        virtual void RemoveBooking(BookingId id) = 0;
+        virtual std::optional<TBooking> GetBooking(BookingId id) = 0;
+        virtual std::vector<TBooking> ListAll() = 0;
     };
 
-    class Repository: public IRepository {
+    class TRepository: public IRepository {
     public:
-        explicit Repository(std::shared_ptr<IStorage> storage)
-            : storage_(std::move(storage)) {
-            reload();
+        explicit TRepository(std::shared_ptr<IStorage> storage)
+            : Storage(std::move(storage)) {
+            Reload();
         }
 
-        BookingId createBooking(const Booking& b) override {
-            std::lock_guard lk(mutex_);
-            Booking nb = b;
+        BookingId CreateBooking(const TBooking& b) override {
+            std::lock_guard lk(Mutex_);
+            TBooking nb = b;
             BookingId maxid = 0;
-            for (auto const& ex : bookings_) {
+            for (auto const& ex : Bookings) {
                 maxid = std::max(maxid, ex.first);
             }
-            nb.id = maxid + 1;
-            bookings_[nb.id] = nb;
-            persist();
-            nlohmann::json je = {{"op", "create"}, {"booking", bookingToJson(nb)}};
-            storage_->appendJournal(je);
-            return nb.id;
+            nb.Id = maxid + 1;
+            Bookings[nb.Id] = nb;
+            Persist();
+            nlohmann::json je = {{"op", "create"}, {"booking", BookingToJson(nb)}};
+            Storage->AppendJournal(je);
+            return nb.Id;
         }
 
-        void updateBooking(const Booking& b) override {
-            std::lock_guard lk(mutex_);
-            bookings_[b.id] = b;
-            persist();
-            nlohmann::json je = {{"op", "update"}, {"booking", bookingToJson(b)}};
-            storage_->appendJournal(je);
+        void UpdateBooking(const TBooking& b) override {
+            std::lock_guard lk(Mutex_);
+            Bookings[b.Id] = b;
+            Persist();
+            nlohmann::json je = {{"op", "update"}, {"booking", BookingToJson(b)}};
+            Storage->AppendJournal(je);
         }
 
-        void removeBooking(BookingId id) override {
-            std::lock_guard lk(mutex_);
-            bookings_.erase(id);
-            persist();
+        void RemoveBooking(BookingId id) override {
+            std::lock_guard lk(Mutex_);
+            Bookings.erase(id);
+            Persist();
             nlohmann::json je = {{"op", "remove"}, {"id", id}};
-            storage_->appendJournal(je);
+            Storage->AppendJournal(je);
         }
 
-        std::optional<Booking> getBooking(BookingId id) override {
-            std::lock_guard lk(mutex_);
-            auto it = bookings_.find(id);
-            if (it == bookings_.end()) {
+        std::optional<TBooking> GetBooking(BookingId id) override {
+            std::lock_guard lk(Mutex_);
+            auto it = Bookings.find(id);
+            if (it == Bookings.end()) {
                 return std::nullopt;
             }
             return it->second;
         }
 
-        std::vector<Booking> listAll() override {
-            std::lock_guard lk(mutex_);
-            std::vector<Booking> out;
-            out.reserve(bookings_.size());
-            for (auto const& kv : bookings_) {
+        std::vector<TBooking> ListAll() override {
+            std::lock_guard lk(Mutex_);
+            std::vector<TBooking> out;
+            out.reserve(Bookings.size());
+            for (auto const& kv : Bookings) {
                 out.push_back(kv.second);
             }
             return out;
         }
 
     private:
-        void reload() {
-            std::lock_guard lk(mutex_);
-            bookings_.clear();
-            nlohmann::json snap = storage_->loadState();
+        void Reload() {
+            std::lock_guard lk(Mutex_);
+            Bookings.clear();
+            nlohmann::json snap = Storage->LoadState();
             if (snap.is_object() && snap.contains("bookings") && snap["bookings"].is_array()) {
                 for (auto const& jb : snap["bookings"]) {
-                    Booking b;
-                    from_json(jb, b);
-                    bookings_[b.id] = b;
+                    TBooking b;
+                    FromJSON(jb, b);
+                    Bookings[b.Id] = b;
                 }
             }
         }
 
-        void persist() {
+        void Persist() {
             nlohmann::json snap = nlohmann::json::object();
             snap["bookings"] = nlohmann::json::array();
-            for (auto const& kv : bookings_) {
-                snap["bookings"].push_back(bookingToJson(kv.second));
+            for (auto const& kv : Bookings) {
+                snap["bookings"].push_back(BookingToJson(kv.second));
             }
-            storage_->saveState(snap);
+            Storage->SaveState(snap);
         }
 
-        static nlohmann::json bookingToJson(const Booking& b) {
+        static nlohmann::json BookingToJson(const TBooking& b) {
             nlohmann::json j;
-            to_json(j, b);
+            ToJSON(j, b);
             nlohmann::json r;
-            r["type"] = static_cast<int>(b.recurrence.type);
-            if (b.recurrence.until) {
-                r["until"] = std::chrono::duration_cast<std::chrono::seconds>(b.recurrence.until->time_since_epoch()).count();
+            r["type"] = static_cast<int>(b.Recurrence.type);
+            if (b.Recurrence.Until) {
+                r["until"] = std::chrono::duration_cast<std::chrono::seconds>(b.Recurrence.Until->time_since_epoch()).count();
             }
             j["recurrence"] = r;
             j["attendees"] = nlohmann::json::array();
-            for (auto a : b.attendees) {
+            for (auto a : b.Attendees) {
                 j["attendees"].push_back(a);
             }
             j["resources"] = nlohmann::json::array();
-            for (auto const& res : b.resources) {
-                j["resources"].push_back(res.id);
+            for (auto const& res : b.Resources) {
+                j["resources"].push_back(res.Id);
             }
             return j;
         }
 
-        static void from_json(const nlohmann::json& j, Booking& b) {
-            booking::from_json(j, b);
+        static void FromJSON(const nlohmann::json& j, TBooking& b) {
+            NBooking::FromJsonInternal(j, b);
             if (j.contains("recurrence")) {
                 auto const& r = j["recurrence"];
                 if (r.contains("type")) {
-                    b.recurrence.type = static_cast<Recurrence::Type>(r["type"].get<int>());
+                    b.Recurrence.type = static_cast<TRecurrence::Type>(r["type"].get<int>());
                 }
                 if (r.contains("until")) {
                     long long s = r["until"].get<long long>();
-                    b.recurrence.until = std::chrono::system_clock::time_point(std::chrono::seconds(s));
+                    b.Recurrence.Until = std::chrono::system_clock::time_point(std::chrono::seconds(s));
                 }
             }
             if (j.contains("attendees") && j["attendees"].is_array()) {
-                b.attendees.clear();
+                b.Attendees.clear();
                 for (auto const& a : j["attendees"]) {
-                    b.attendees.push_back(a.get<UserId>());
+                    b.Attendees.push_back(a.get<UserId>());
                 }
             }
             if (j.contains("resources") && j["resources"].is_array()) {
-                b.resources.clear();
+                b.Resources.clear();
                 for (auto const& r : j["resources"]) {
-                    b.resources.push_back(Resource{r.get<std::string>()});
+                    b.Resources.push_back(TResource{r.get<std::string>()});
                 }
             }
         }
 
     private:
-        std::shared_ptr<IStorage> storage_;
-        std::mutex mutex_;
-        std::unordered_map<BookingId, Booking> bookings_;
+        std::shared_ptr<IStorage> Storage;
+        std::mutex Mutex_;
+        std::unordered_map<BookingId, TBooking> Bookings;
     };
 
     struct ICommand {
         virtual ~ICommand() = default;
-        virtual void execute() = 0;
-        virtual void undo() = 0;
-        virtual std::string describe() const = 0;
+        virtual void Execute() = 0;
+        virtual void Undo() = 0;
+        virtual std::string Describe() const = 0;
     };
 
-    class CreateBookingCommand: public ICommand {
+    class TCreateBookingCommand: public ICommand {
     public:
-        CreateBookingCommand(IRepository& repo, Booking booking)
-            : repo_(repo)
-            , booking_(std::move(booking)) {
+        TCreateBookingCommand(IRepository& repo, TBooking booking)
+            : Repo(repo)
+            , Booking(std::move(booking)) {
         }
 
-        void execute() override {
-            if (!executed_) {
-                booking_.id = repo_.createBooking(booking_);
-                executed_ = true;
+        void Execute() override {
+            if (!Executed) {
+                Booking.Id = Repo.CreateBooking(Booking);
+                Executed = true;
             } else {
-                repo_.updateBooking(booking_);
+                Repo.UpdateBooking(Booking);
             }
         }
 
-        void undo() override {
-            if (executed_) {
-                repo_.removeBooking(booking_.id);
+        void Undo() override {
+            if (Executed) {
+                Repo.RemoveBooking(Booking.Id);
             }
         }
 
-        std::string describe() const {
-            return "Create booking id=" + std::to_string(booking_.id) + " title=\"" + booking_.title + "\"";
+        std::string Describe() const {
+            return "Create booking id=" + std::to_string(Booking.Id) + " title=\"" + Booking.Title + "\"";
         }
 
         BookingId id() const {
-            return booking_.id;
+            return Booking.Id;
         }
 
     private:
-        IRepository& repo_;
-        Booking booking_;
-        bool executed_ = false;
+        IRepository& Repo;
+        TBooking Booking;
+        bool Executed = false;
     };
 
-    class UpdateBookingCommand: public ICommand {
+    class TUpdateBookingCommand: public ICommand {
     public:
-        UpdateBookingCommand(IRepository& repo, Booking before, Booking after)
-            : repo_(repo)
-            , before_(std::move(before))
-            , after_(std::move(after)) {
+        TUpdateBookingCommand(IRepository& repo, TBooking before, TBooking after)
+            : Repo(repo)
+            , Before(std::move(before))
+            , After(std::move(after)) {
         }
 
-        void execute() override {
-            repo_.updateBooking(after_);
+        void Execute() override {
+            Repo.UpdateBooking(After);
         }
 
-        void undo() override {
-            repo_.updateBooking(before_);
+        void Undo() override {
+            Repo.UpdateBooking(Before);
         }
 
-        std::string describe() const {
-            return "Update booking id=" + std::to_string(before_.id) + " title=\"" + before_.title + "\"";
+        std::string Describe() const {
+            return "Update booking id=" + std::to_string(Before.Id) + " title=\"" + Before.Title + "\"";
         }
 
     private:
-        IRepository& repo_;
-        Booking before_;
-        Booking after_;
+        IRepository& Repo;
+        TBooking Before;
+        TBooking After;
     };
 
-    class RemoveBookingCommand: public ICommand {
+    class TRemoveBookingCommand: public ICommand {
     public:
-        RemoveBookingCommand(IRepository& repo, BookingId id)
-            : repo_(repo)
-            , id_(id) {
+        TRemoveBookingCommand(IRepository& repo, BookingId id)
+            : Repo(repo)
+            , Id(id) {
         }
 
-        void execute() override {
-            old_ = repo_.getBooking(id_);
-            if (old_) {
-                repo_.removeBooking(id_);
+        void Execute() override {
+            Old = Repo.GetBooking(Id);
+            if (Old) {
+                Repo.RemoveBooking(Id);
             }
         }
 
-        void undo() override {
-            if (old_) {
-                repo_.createBooking(*old_);
+        void Undo() override {
+            if (Old) {
+                Repo.CreateBooking(*Old);
             }
         }
 
-        std::string describe() const {
-            return "Cancel booking id=" + std::to_string(id_);
+        std::string Describe() const {
+            return "Cancel booking id=" + std::to_string(Id);
         }
 
     private:
-        IRepository& repo_;
-        BookingId id_;
-        std::optional<Booking> old_;
+        IRepository& Repo;
+        BookingId Id;
+        std::optional<TBooking> Old;
     };
 
-} // namespace booking
+} // namespace NBooking

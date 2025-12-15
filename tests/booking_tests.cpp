@@ -5,142 +5,142 @@
 
 #include <BookingManager.hpp>
 
-using namespace booking;
+using namespace NBooking;
 
-static User AdminUser() {
-    return User{1, "admin", Role::Admin, 100};
+static TUser AdminUser() {
+    return TUser{1, "admin", ERole::Admin, 100};
 }
-static User ManagerUser() {
-    return User{2, "mgr", Role::Manager, 50};
+static TUser ManagerUser() {
+    return TUser{2, "mgr", ERole::Manager, 50};
 }
-static User NormalUser() {
-    return User{3, "user", Role::User, 10};
+static TUser NormalUser() {
+    return TUser{3, "user", ERole::User, 10};
 }
 
-static Booking MakeBooking(RoomId room, int startOffsetMin, int durationMin) {
-    Booking b;
-    b.room_id = room;
-    b.user_id = 3;
-    b.title = "title";
-    b.description = "desc";
-    b.start =
+static TBooking MakeBooking(RoomId room, int startOffsetMin, int durationMin) {
+    TBooking b;
+    b.RoomIdInternal = room;
+    b.UserIdInternal = 3;
+    b.Title = "title";
+    b.Description = "desc";
+    b.Start =
         std::chrono::system_clock::now() + std::chrono::minutes(startOffsetMin);
-    b.end = b.start + std::chrono::minutes(durationMin);
+    b.End = b.Start + std::chrono::minutes(durationMin);
     return b;
 }
 
 TEST(Conflicts, PartialOverlapFails) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    auto id1 = mgr.createBooking(MakeBooking(1, 0, 60), u);
+    auto id1 = mgr.CreateBooking(MakeBooking(1, 0, 60), u);
     ASSERT_TRUE(id1);
 
-    auto id2 = mgr.createBooking(MakeBooking(1, 30, 60), u);
+    auto id2 = mgr.CreateBooking(MakeBooking(1, 30, 60), u);
     EXPECT_FALSE(id2);
 }
 
 TEST(Conflicts, TouchingIntervalsAllowed) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    auto id1 = mgr.createBooking(MakeBooking(1, 0, 60), u);
+    auto id1 = mgr.CreateBooking(MakeBooking(1, 0, 60), u);
     ASSERT_TRUE(id1);
 
-    auto id2 = mgr.createBooking(MakeBooking(1, 60, 60), u);
+    auto id2 = mgr.CreateBooking(MakeBooking(1, 60, 60), u);
     EXPECT_TRUE(id2.has_value());
 }
 
 TEST(Conflicts, FullyContainedFails) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    mgr.createBooking(MakeBooking(1, 0, 120), u);
-    auto id2 = mgr.createBooking(MakeBooking(1, 30, 10), u);
+    mgr.CreateBooking(MakeBooking(1, 0, 120), u);
+    auto id2 = mgr.CreateBooking(MakeBooking(1, 30, 10), u);
 
     EXPECT_FALSE(id2);
 }
 
 TEST(Conflicts, RecurrenceInstanceConflict) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    Booking r = MakeBooking(1, 0, 60);
-    r.recurrence.type = Recurrence::Type::Daily;
-    r.recurrence.until = r.start + std::chrono::hours(48);
+    TBooking r = MakeBooking(1, 0, 60);
+    r.Recurrence.type = TRecurrence::Type::Daily;
+    r.Recurrence.Until = r.Start + std::chrono::hours(48);
 
-    auto id1 = mgr.createBooking(r, u);
+    auto id1 = mgr.CreateBooking(r, u);
     ASSERT_TRUE(id1);
 
-    auto id2 = mgr.createBooking(MakeBooking(1, 24 * 60, 60), u);
+    auto id2 = mgr.CreateBooking(MakeBooking(1, 24 * 60, 60), u);
     EXPECT_FALSE(id2);
 }
 
 TEST(Resources, SameResourceConflicts) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    Booking a = MakeBooking(1, 0, 60);
-    a.resources.push_back(Resource{"10"});
-    mgr.createBooking(a, u);
+    TBooking a = MakeBooking(1, 0, 60);
+    a.Resources.push_back(TResource{"10"});
+    mgr.CreateBooking(a, u);
 
-    Booking b = MakeBooking(1, 30, 60);
-    b.resources.push_back(Resource{"10"});
+    TBooking b = MakeBooking(1, 30, 60);
+    b.Resources.push_back(TResource{"10"});
 
-    auto id2 = mgr.createBooking(b, u);
+    auto id2 = mgr.CreateBooking(b, u);
     EXPECT_FALSE(id2);
 }
 
 TEST(History, CreateUndoRedoCancel) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    auto id1 = mgr.createBooking(MakeBooking(1, 0, 60), u);
+    auto id1 = mgr.CreateBooking(MakeBooking(1, 0, 60), u);
     ASSERT_TRUE(id1);
 
-    auto msg1 = mgr.undo();
+    auto msg1 = mgr.Undo();
     ASSERT_TRUE(msg1);
-    ASSERT_FALSE(mgr.getBooking(*id1));
+    ASSERT_FALSE(mgr.GetBooking(*id1));
 
-    auto msg2 = mgr.redo();
+    auto msg2 = mgr.Redo();
     ASSERT_TRUE(msg2);
-    ASSERT_TRUE(mgr.getBooking(*id1));
+    ASSERT_TRUE(mgr.GetBooking(*id1));
 
-    mgr.cancelBooking(*id1, u);
-    ASSERT_FALSE(mgr.getBooking(*id1));
+    mgr.CancelBooking(*id1, u);
+    ASSERT_FALSE(mgr.GetBooking(*id1));
 }
 
 TEST(History, HistoryLimitWorks) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
     for (int i = 0; i < 400; i++) {
-        mgr.createBooking(MakeBooking(1, i * 2, 1), u);
+        mgr.CreateBooking(MakeBooking(1, i * 2, 1), u);
     }
 
     int undoCount = 0;
-    while (mgr.undo()) {
+    while (mgr.Undo()) {
         undoCount++;
     }
 
@@ -148,10 +148,10 @@ TEST(History, HistoryLimitWorks) {
 }
 
 TEST(Multithreading, ParallelCreatesNoCrashes) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
     constexpr int THREADS = 8;
@@ -164,7 +164,7 @@ TEST(Multithreading, ParallelCreatesNoCrashes) {
         th.emplace_back([&] {
             for (int i = 0; i < PER_THREAD; i++) {
                 RoomId r = 100 + (i % 5);
-                auto id = mgr.createBooking(MakeBooking(r, i * 2, 1), u);
+                auto id = mgr.CreateBooking(MakeBooking(r, i * 2, 1), u);
                 if (id) {
                     created++;
                 }
@@ -180,126 +180,126 @@ TEST(Multithreading, ParallelCreatesNoCrashes) {
 }
 
 TEST(Conflicts, LongIntervalContainsShortFails) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    auto id1 = mgr.createBooking(MakeBooking(1, 0, 240), u);
+    auto id1 = mgr.CreateBooking(MakeBooking(1, 0, 240), u);
     ASSERT_TRUE(id1);
 
-    auto id2 = mgr.createBooking(MakeBooking(1, 60, 30), u);
+    auto id2 = mgr.CreateBooking(MakeBooking(1, 60, 30), u);
     EXPECT_FALSE(id2);
 }
 
 TEST(Conflicts, Recurrence_NoConflictDifferentTimes) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    Booking a = MakeBooking(1, 0, 60);
-    a.recurrence.type = Recurrence::Type::Daily;
-    a.recurrence.until = a.start + std::chrono::hours(2);
+    TBooking a = MakeBooking(1, 0, 60);
+    a.Recurrence.type = TRecurrence::Type::Daily;
+    a.Recurrence.Until = a.Start + std::chrono::hours(2);
 
-    Booking b = MakeBooking(1, 120, 60);
-    b.recurrence.type = Recurrence::Type::Daily;
-    b.recurrence.until = b.start + std::chrono::hours(2);
+    TBooking b = MakeBooking(1, 120, 60);
+    b.Recurrence.type = TRecurrence::Type::Daily;
+    b.Recurrence.Until = b.Start + std::chrono::hours(2);
 
-    auto id1 = mgr.createBooking(a, u);
+    auto id1 = mgr.CreateBooking(a, u);
     ASSERT_TRUE(id1);
 
-    auto id2 = mgr.createBooking(b, u);
+    auto id2 = mgr.CreateBooking(b, u);
     EXPECT_TRUE(id2.has_value());
 }
 
 TEST(Resources, SameResources_Conflict) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    Booking a = MakeBooking(1, 0, 60);
-    a.resources.push_back(Resource{"projector-A"});
+    TBooking a = MakeBooking(1, 0, 60);
+    a.Resources.push_back(TResource{"projector-A"});
 
-    Booking b = MakeBooking(1, 0, 60);
-    b.resources.push_back(Resource{"projector-A"});
+    TBooking b = MakeBooking(1, 0, 60);
+    b.Resources.push_back(TResource{"projector-A"});
 
-    auto id1 = mgr.createBooking(a, u);
+    auto id1 = mgr.CreateBooking(a, u);
     ASSERT_TRUE(id1);
 
-    auto id2 = mgr.createBooking(b, u);
+    auto id2 = mgr.CreateBooking(b, u);
     EXPECT_FALSE(id2.has_value());
 }
 
 TEST(Conflicts, DifferentRooms_NoConflict) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    auto id1 = mgr.createBooking(MakeBooking(1, 0, 60), u);
+    auto id1 = mgr.CreateBooking(MakeBooking(1, 0, 60), u);
     ASSERT_TRUE(id1);
 
-    auto id2 = mgr.createBooking(MakeBooking(2, 0, 60), u);
+    auto id2 = mgr.CreateBooking(MakeBooking(2, 0, 60), u);
     EXPECT_TRUE(id2.has_value());
 }
 
 TEST(Resources, DifferentResources_NoConflict) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    Booking a = MakeBooking(1, 0, 60);
-    a.resources.push_back(Resource{"projector-A"});
+    TBooking a = MakeBooking(1, 0, 60);
+    a.Resources.push_back(TResource{"projector-A"});
 
-    Booking b = MakeBooking(1, 120, 60);
-    b.resources.push_back(Resource{"projector-B"});
+    TBooking b = MakeBooking(1, 120, 60);
+    b.Resources.push_back(TResource{"projector-B"});
 
-    auto id1 = mgr.createBooking(a, u);
+    auto id1 = mgr.CreateBooking(a, u);
     ASSERT_TRUE(id1);
 
-    auto id2 = mgr.createBooking(b, u);
+    auto id2 = mgr.CreateBooking(b, u);
     EXPECT_TRUE(id2.has_value());
 }
 
 TEST(History, CancelThenUndoRestoresBooking) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
     auto u = NormalUser();
 
-    auto id = mgr.createBooking(MakeBooking(1, 0, 60), u);
+    auto id = mgr.CreateBooking(MakeBooking(1, 0, 60), u);
     ASSERT_TRUE(id);
 
-    ASSERT_TRUE(mgr.cancelBooking(*id, u));
-    ASSERT_FALSE(mgr.getBooking(*id));
+    ASSERT_TRUE(mgr.CancelBooking(*id, u));
+    ASSERT_FALSE(mgr.GetBooking(*id));
 
-    auto msg = mgr.undo();
+    auto msg = mgr.Undo();
     ASSERT_TRUE(msg);
-    EXPECT_TRUE(mgr.getBooking(*id));
+    EXPECT_TRUE(mgr.GetBooking(*id));
 }
 
 TEST(RBAC, UserCannotCancelForeignBooking) {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
 
-    BookingManager mgr(repo, storage, std::make_shared<RejectStrategy>());
+    TBookingManager mgr(repo, storage, std::make_shared<TRejectStrategy>());
 
     auto owner = NormalUser();
-    auto other = User{42, "other", Role::User, 10};
+    auto other = TUser{42, "other", ERole::User, 10};
 
-    auto id = mgr.createBooking(MakeBooking(1, 0, 60), owner);
+    auto id = mgr.CreateBooking(MakeBooking(1, 0, 60), owner);
     ASSERT_TRUE(id);
 
     EXPECT_THROW(
-        mgr.cancelBooking(*id, other),
+        mgr.CancelBooking(*id, other),
         std::runtime_error);
 }

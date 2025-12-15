@@ -7,32 +7,32 @@ static std::chrono::system_clock::time_point tp_from_sec(long long s) {
     return std::chrono::system_clock::time_point{std::chrono::seconds{s}};
 }
 
-namespace booking {
+namespace NBooking {
 
-    struct CalendarEvent {
-        RoomId room_id;
-        UserId user_id;
-        std::chrono::system_clock::time_point start;
-        std::chrono::system_clock::time_point end;
-        std::string title;
-        std::string description;
+    struct TCalendarEvent {
+        RoomId RoomIdInternal;
+        UserId UserIdInternal;
+        std::chrono::system_clock::time_point Start;
+        std::chrono::system_clock::time_point End;
+        std::string Title;
+        std::string Description;
     };
 
     class ICalendarAdapter {
     public:
         virtual ~ICalendarAdapter() = default;
-        virtual std::vector<CalendarEvent> fetch(
+        virtual std::vector<TCalendarEvent> Fetch(
             std::chrono::system_clock::time_point from,
             std::chrono::system_clock::time_point to) = 0;
     };
 
-    class JsonCalendarAdapter final: public ICalendarAdapter {
+    class TJsonCalendarAdapter final: public ICalendarAdapter {
     public:
-        explicit JsonCalendarAdapter(std::string file)
+        explicit TJsonCalendarAdapter(std::string file)
             : file_(std::move(file)) {
         }
 
-        std::vector<CalendarEvent> fetch(
+        std::vector<TCalendarEvent> Fetch(
             std::chrono::system_clock::time_point from,
             std::chrono::system_clock::time_point to) override {
             std::ifstream in(file_);
@@ -43,7 +43,7 @@ namespace booking {
             nlohmann::json j;
             in >> j;
 
-            std::vector<CalendarEvent> out;
+            std::vector<TCalendarEvent> out;
 
             if (!j.is_array()) {
                 return out;
@@ -60,13 +60,13 @@ namespace booking {
                     continue;
                 }
 
-                CalendarEvent ev;
-                ev.room_id = e.at("room_id").get<RoomId>();
-                ev.user_id = e.at("user_id").get<UserId>();
-                ev.start = start;
-                ev.end = end;
-                ev.title = e.value("title", "");
-                ev.description = e.value("description", "");
+                TCalendarEvent ev;
+                ev.RoomIdInternal = e.at("room_id").get<RoomId>();
+                ev.UserIdInternal = e.at("user_id").get<UserId>();
+                ev.Start = start;
+                ev.End = end;
+                ev.Title = e.value("title", "");
+                ev.Description = e.value("description", "");
 
                 out.push_back(std::move(ev));
             }
@@ -78,4 +78,4 @@ namespace booking {
         std::string file_;
     };
 
-} // namespace booking
+} // namespace NBooking

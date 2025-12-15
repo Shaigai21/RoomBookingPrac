@@ -6,38 +6,38 @@
 
 struct IStorage {
     virtual ~IStorage() = default;
-    virtual void saveState(const nlohmann::json& snapshot) = 0;
-    virtual nlohmann::json loadState() = 0;
-    virtual void appendJournal(const nlohmann::json& entry) = 0;
-    virtual std::vector<nlohmann::json> loadJournal() = 0;
+    virtual void SaveState(const nlohmann::json& snapshot) = 0;
+    virtual nlohmann::json LoadState() = 0;
+    virtual void AppendJournal(const nlohmann::json& entry) = 0;
+    virtual std::vector<nlohmann::json> LoadJournal() = 0;
 };
 
-class MemoryStorage: public IStorage {
+class TMemoryStorage: public IStorage {
 public:
-    MemoryStorage() = default;
+    TMemoryStorage() = default;
 
-    void saveState(const nlohmann::json& snapshot) override {
-        std::scoped_lock lk(mutex_);
-        snapshot_ = snapshot;
+    void SaveState(const nlohmann::json& snapshot) override {
+        std::scoped_lock lk(Mutex_);
+        Snapshot = snapshot;
     }
 
-    nlohmann::json loadState() override {
-        std::scoped_lock lk(mutex_);
-        return snapshot_;
+    nlohmann::json LoadState() override {
+        std::scoped_lock lk(Mutex_);
+        return Snapshot;
     }
 
-    void appendJournal(const nlohmann::json& entry) override {
-        std::scoped_lock lk(mutex_);
-        journal_.push_back(entry);
+    void AppendJournal(const nlohmann::json& entry) override {
+        std::scoped_lock lk(Mutex_);
+        Journal.push_back(entry);
     }
 
-    std::vector<nlohmann::json> loadJournal() override {
-        std::scoped_lock lk(mutex_);
-        return journal_;
+    std::vector<nlohmann::json> LoadJournal() override {
+        std::scoped_lock lk(Mutex_);
+        return Journal;
     }
 
 private:
-    nlohmann::json snapshot_ = nlohmann::json::object();
-    std::vector<nlohmann::json> journal_;
-    std::mutex mutex_;
+    nlohmann::json Snapshot = nlohmann::json::object();
+    std::vector<nlohmann::json> Journal;
+    std::mutex Mutex_;
 };

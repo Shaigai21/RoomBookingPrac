@@ -5,16 +5,16 @@
 #include <chrono>
 #include <memory>
 
-using namespace booking;
+using namespace NBooking;
 
 int main() {
-    auto storage = std::make_shared<MemoryStorage>();
-    auto repo = std::make_shared<Repository>(storage);
-    auto strategy = std::make_shared<RejectStrategy>();
-    // auto strategy = std::make_shared<PreemptStrategy>();
-    // auto strategy = std::make_shared<QuorumStrategy>(3);
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
+    auto strategy = std::make_shared<TRejectStrategy>();
+    // auto strategy = std::make_shared<TPreemptStrategy>();
+    // auto strategy = std::make_shared<TQuorumStrategy>(3);
 
-    BookingManager mgr(repo, storage, strategy);
+    TBookingManager mgr(repo, storage, strategy);
 
     std::cout << "Simple Booking CLI. Commands:\n"
               << "  login <id> <name> <role:Admin|Manager|User>  -- authenticate as user\n"
@@ -25,7 +25,7 @@ int main() {
               << "  redo\n"
               << "  exit\n";
 
-    User current{0, "guest", Role::User, 0};
+    TUser current{0, "guest", ERole::User, 0};
 
     std::string line;
     while (true) {
@@ -48,13 +48,13 @@ int main() {
                 std::string name;
                 std::string role;
                 iss >> id >> name >> role;
-                Role r = Role::User;
+                ERole r = ERole::User;
                 if (role == "Admin") {
-                    r = Role::Admin;
+                    r = ERole::Admin;
                 } else if (role == "Manager") {
-                    r = Role::Manager;
+                    r = ERole::Manager;
                 }
-                current = User{static_cast<UserId>(id), name, r, (r == Role::Admin ? 100 : (r == Role::Manager ? 50 : 10))};
+                current = TUser{static_cast<UserId>(id), name, r, (r == ERole::Admin ? 100 : (r == ERole::Manager ? 50 : 10))};
                 std::cout << "Logged in as " << name << " role=" << role << "\n";
                 continue;
             }
@@ -69,15 +69,15 @@ int main() {
                     std::cout << "Usage: create <room> <hours> <title> <description>\n";
                     continue;
                 }
-                Booking b;
-                b.room_id = rid;
-                b.user_id = current.id;
-                b.start = std::chrono::system_clock::now();
-                b.end = b.start + std::chrono::hours(hours);
-                b.title = title;
-                b.description = desc;
-                b.attendees = {};
-                auto id = mgr.createBooking(b, current);
+                TBooking b;
+                b.RoomIdInternal = rid;
+                b.UserIdInternal = current.Id;
+                b.Start = std::chrono::system_clock::now();
+                b.End = b.Start + std::chrono::hours(hours);
+                b.Title = title;
+                b.Description = desc;
+                b.Attendees = {};
+                auto id = mgr.CreateBooking(b, current);
                 if (id) {
                     std::cout << "Created booking with id=" << *id << "\n";
                 } else {
@@ -93,11 +93,11 @@ int main() {
                     rid = 1;
                 }
                 auto now = std::chrono::system_clock::now();
-                auto items = mgr.listBookings(rid, now - std::chrono::hours(24), now + std::chrono::hours(24));
+                auto items = mgr.ListBookings(rid, now - std::chrono::hours(24), now + std::chrono::hours(24));
                 for (auto& b : items) {
-                    auto start_s = std::chrono::duration_cast<std::chrono::seconds>(b.start.time_since_epoch()).count();
-                    auto end_s = std::chrono::duration_cast<std::chrono::seconds>(b.end.time_since_epoch()).count();
-                    std::cout << "id=" << b.id << " title=\"" << b.title << "\" start=" << start_s << " end=" << end_s << " owner=" << b.user_id << "\n";
+                    auto start_s = std::chrono::duration_cast<std::chrono::seconds>(b.Start.time_since_epoch()).count();
+                    auto end_s = std::chrono::duration_cast<std::chrono::seconds>(b.End.time_since_epoch()).count();
+                    std::cout << "id=" << b.Id << " title=\"" << b.Title << "\" start=" << start_s << " end=" << end_s << " owner=" << b.UserIdInternal << "\n";
                 }
                 continue;
             }
@@ -109,13 +109,13 @@ int main() {
                     std::cout << "Usage: cancel <id>\n";
                     continue;
                 }
-                bool ok = mgr.cancelBooking(id, current);
+                bool ok = mgr.CancelBooking(id, current);
                 std::cout << (ok ? "Cancelled" : "Not found") << " id=" << id << "\n";
                 continue;
             }
 
             if (cmd == "undo") {
-                auto res = mgr.undo();
+                auto res = mgr.Undo();
                 if (res) {
                     std::cout << *res << "\n";
                 } else {
@@ -125,7 +125,7 @@ int main() {
             }
 
             if (cmd == "redo") {
-                auto res = mgr.redo();
+                auto res = mgr.Redo();
                 if (res) {
                     std::cout << *res << "\n";
                 } else {
