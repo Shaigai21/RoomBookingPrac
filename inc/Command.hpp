@@ -1,7 +1,8 @@
 #pragma once
 #include <memory>
 #include <optional>
-#include "models.hpp"
+#include "common.hpp"
+#include "Storage.hpp"
 
 namespace NBooking {
 
@@ -187,32 +188,6 @@ namespace NBooking {
         IRepository& Repo;
         TBooking Booking;
         bool Executed = false;
-    };
-
-    class TUpdateBookingCommand: public ICommand {
-    public:
-        TUpdateBookingCommand(IRepository& repo, TBooking before, TBooking after)
-            : Repo(repo)
-            , Before(std::move(before))
-            , After(std::move(after)) {
-        }
-
-        void Execute() override {
-            Repo.UpdateBooking(After);
-        }
-
-        void Undo() override {
-            Repo.UpdateBooking(Before);
-        }
-
-        std::string Describe() const {
-            return "Update booking id=" + std::to_string(Before.Id) + " title=\"" + Before.Title + "\"";
-        }
-
-    private:
-        IRepository& Repo;
-        TBooking Before;
-        TBooking After;
     };
 
     class TRemoveBookingCommand: public ICommand {

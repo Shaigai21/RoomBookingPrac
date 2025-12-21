@@ -4,11 +4,10 @@
 #include <deque>
 #include <vector>
 
-#include "models.hpp"
-#include "storage.hpp"
-#include "strategies.hpp"
-#include "commands.hpp"
-#include "calendar.hpp"
+#include "common.hpp"
+#include "Storage.hpp"
+#include "Strategy.hpp"
+#include "Command.hpp"
 
 namespace NBooking {
 
@@ -20,7 +19,6 @@ namespace NBooking {
 
         std::optional<BookingId> CreateBooking(const TBooking& req, const TUser& actor);
         std::optional<BookingId> CreateBooking(const TCreateRequest& req);
-        bool ModifyBooking(const TChangeRequest& req);
         bool CancelBooking(BookingId id, const TUser& actor);
 
         std::optional<TBooking> GetBooking(BookingId id);
@@ -31,11 +29,7 @@ namespace NBooking {
         std::optional<std::string> Undo();
         std::optional<std::string> Redo();
 
-        std::vector<BookingId> ImportFromCalendar(
-            ICalendarAdapter& adapter,
-            std::chrono::system_clock::time_point from,
-            std::chrono::system_clock::time_point to,
-            const TUser& actor);
+        // for debug
         void SetStrategy(std::shared_ptr<IConflictStrategy> s);
 
     private:

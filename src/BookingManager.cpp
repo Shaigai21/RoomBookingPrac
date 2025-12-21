@@ -1,4 +1,5 @@
 #include <BookingManager.hpp>
+#include <iostream>
 
 namespace NBooking {
 
@@ -110,18 +111,21 @@ namespace NBooking {
                       ? (*req.Recurrence.Until + hours(1))
                       : (req.Start + hours(24 * 365));
 
-        auto requestedInst = GenerateInstances(req, from, to);
+        TBooking req_copy = req;
+        req_copy.OwnerPriority = actor.Priority;
+
+        auto requestedInst = GenerateInstances(req_copy, from, to);
 
         if (requestedInst.empty()) {
-            requestedInst.push_back(req);
+            requestedInst.push_back(req_copy);
         }
 
         std::vector<TBooking> existingInst;
         for (auto& ex : Repo->ListAll()) {
-            bool related = (ex.RoomIdInternal == req.RoomIdInternal);
+            bool related = (ex.RoomIdInternal == req_copy.RoomIdInternal);
             if (!related) {
                 for (auto& r : ex.Resources) {
-                    for (auto& rr : req.Resources) {
+                    for (auto& rr : req_copy.Resources) {
                         if (r.Id == rr.Id) {
                             related = true;
                         }
@@ -142,8 +146,39 @@ namespace NBooking {
                 return std::nullopt;
             }
 
+            if (!res.ToPreempt.empty()) {
+                if (actor.Role != ERole::Admin && actor.Role != ERole::Manager) {
+                    return std::nullopt;
+                }
+
+                for (BookingId bid : res.ToPreempt) {
+                    auto old = Repo->GetBooking(bid);
+                    if (!old) {
+                        continue;
+                    }
+
+                    auto rm = std::make_unique<TRemoveBookingCommand>(*Repo, bid);
+                    rm->Execute();
+
+                    if (Repo->GetBooking(bid)) {
+                        Repo->RemoveBooking(bid);
+                    }
+
+                    PushUndo(std::move(rm));
+                }
+
+                existingInst.erase(
+                    std::remove_if(existingInst.begin(), existingInst.end(),
+                                   [&](const TBooking& b) {
+                                       return std::find(res.ToPreempt.begin(),
+                                                        res.ToPreempt.end(),
+                                                        b.Id) != res.ToPreempt.end();
+                                   }),
+                    existingInst.end());
+            }
+
             if (res.SuggestedStart) {
-                TBooking adjusted = req;
+                TBooking adjusted = req_copy;
                 auto dur = adjusted.End - adjusted.Start;
                 adjusted.Start = *res.SuggestedStart;
                 adjusted.End = adjusted.Start + dur;
@@ -156,7 +191,7 @@ namespace NBooking {
             }
         }
 
-        auto cmd = std::make_unique<TCreateBookingCommand>(*Repo, req);
+        auto cmd = std::make_unique<TCreateBookingCommand>(*Repo, req_copy);
         cmd->Execute();
         auto id = cmd->id();
         PushUndo(std::move(cmd));
@@ -165,38 +200,6 @@ namespace NBooking {
 
     std::optional<BookingId> TBookingManager::CreateBooking(const TCreateRequest& req) {
         return CreateBooking(req.Booking, req.Actor);
-    }
-
-    bool TBookingManager::ModifyBooking(const TChangeRequest& req) {
-        std::lock_guard lk(Mutex_);
-
-        auto old = Repo->GetBooking(req.Id);
-        if (!old) {
-            return false;
-        }
-
-        if (!CanModify(req.Actor, *old)) {
-            throw std::runtime_error("Access denied: modify");
-        }
-
-        TBooking updated = *old;
-        if (req.Title) {
-            updated.Title = *req.Title;
-        }
-        if (req.Description) {
-            updated.Description = *req.Description;
-        }
-        if (req.Start) {
-            updated.Start = *req.Start;
-        }
-        if (req.End) {
-            updated.End = *req.End;
-        }
-
-        auto cmd = std::make_unique<TUpdateBookingCommand>(*Repo, *old, updated);
-        cmd->Execute();
-        PushUndo(std::move(cmd));
-        return true;
     }
 
     bool TBookingManager::CancelBooking(BookingId id, const TUser& actor) {
@@ -218,35 +221,6 @@ namespace NBooking {
     void TBookingManager::SetStrategy(std::shared_ptr<IConflictStrategy> s) {
         std::lock_guard lk(Mutex_);
         Strat = s;
-    }
-
-    std::vector<BookingId> TBookingManager::ImportFromCalendar(
-        ICalendarAdapter& adapter,
-        std::chrono::system_clock::time_point from,
-        std::chrono::system_clock::time_point to,
-        const TUser& actor) {
-        if (actor.Role != ERole::Admin && actor.Role != ERole::Manager) {
-            throw std::runtime_error("Access denied: import");
-        }
-
-        std::vector<BookingId> imported;
-        auto events = adapter.Fetch(from, to);
-
-        for (auto const& ev : events) {
-            TBooking b;
-            b.RoomIdInternal = ev.RoomIdInternal;
-            b.UserIdInternal = ev.UserIdInternal;
-            b.Start = ev.Start;
-            b.End = ev.End;
-            b.Title = ev.Title;
-            b.Description = ev.Description;
-
-            if (auto id = CreateBooking(b, actor)) {
-                imported.push_back(*id);
-            }
-        }
-
-        return imported;
     }
 
 } // namespace NBooking

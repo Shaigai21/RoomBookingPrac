@@ -176,7 +176,7 @@ TEST(Multithreading, ParallelCreatesNoCrashes) {
         x.join();
     }
 
-    EXPECT_GT(created.load(), 0);
+    EXPECT_EQ(created.load(), 20);
 }
 
 TEST(Conflicts, LongIntervalContainsShortFails) {
@@ -193,7 +193,7 @@ TEST(Conflicts, LongIntervalContainsShortFails) {
     EXPECT_FALSE(id2);
 }
 
-TEST(Conflicts, Recurrence_NoConflictDifferentTimes) {
+TEST(Conflicts, RecurrenceNoConflictDifferentTimes) {
     auto storage = std::make_shared<TMemoryStorage>();
     auto repo = std::make_shared<TRepository>(storage);
 
@@ -215,7 +215,7 @@ TEST(Conflicts, Recurrence_NoConflictDifferentTimes) {
     EXPECT_TRUE(id2.has_value());
 }
 
-TEST(Resources, SameResources_Conflict) {
+TEST(Resources, SameResourcesConflict) {
     auto storage = std::make_shared<TMemoryStorage>();
     auto repo = std::make_shared<TRepository>(storage);
 
@@ -235,7 +235,7 @@ TEST(Resources, SameResources_Conflict) {
     EXPECT_FALSE(id2.has_value());
 }
 
-TEST(Conflicts, DifferentRooms_NoConflict) {
+TEST(Conflicts, DifferentRoomsNoConflict) {
     auto storage = std::make_shared<TMemoryStorage>();
     auto repo = std::make_shared<TRepository>(storage);
 
@@ -249,7 +249,7 @@ TEST(Conflicts, DifferentRooms_NoConflict) {
     EXPECT_TRUE(id2.has_value());
 }
 
-TEST(Resources, DifferentResources_NoConflict) {
+TEST(Resources, DifferentResourcesNoConflict) {
     auto storage = std::make_shared<TMemoryStorage>();
     auto repo = std::make_shared<TRepository>(storage);
 
@@ -302,4 +302,88 @@ TEST(RBAC, UserCannotCancelForeignBooking) {
     EXPECT_THROW(
         mgr.CancelBooking(*id, other),
         std::runtime_error);
+}
+
+TEST(Strategy, AutoBumpShiftsToFreeSlot) {
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
+
+    TBookingManager mgr(repo, storage, std::make_shared<TAutoBumpStrategy>());
+    auto u = NormalUser();
+
+    auto id1 = mgr.CreateBooking(MakeBooking(1, 0, 60), u);
+    ASSERT_TRUE(id1);
+
+    auto id2 = mgr.CreateBooking(MakeBooking(1, 30, 60), u);
+    ASSERT_TRUE(id2);
+
+    auto b2 = mgr.GetBooking(*id2);
+    ASSERT_TRUE(b2);
+    EXPECT_GE(b2->Start, mgr.GetBooking(*id1)->End);
+}
+
+TEST(Strategy, PreemptAdminPreemptsUser) {
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
+
+    TBookingManager mgr(repo, storage, std::make_shared<TPreemptStrategy>());
+
+    auto user = NormalUser();
+    auto admin = AdminUser();
+
+    auto id1 = mgr.CreateBooking(MakeBooking(1, 0, 60), user);
+    ASSERT_TRUE(id1);
+
+    auto id2 = mgr.CreateBooking(MakeBooking(1, 30, 61), admin);
+    ASSERT_TRUE(id2);
+    EXPECT_EQ(*id1, *id2);
+    EXPECT_EQ(*id2, 1);
+}
+
+TEST(Strategy, PreemptUserCannotPreemptAdmin) {
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
+
+    TBookingManager mgr(repo, storage, std::make_shared<TPreemptStrategy>());
+
+    auto admin = AdminUser();
+    auto user = NormalUser();
+
+    auto id1 = mgr.CreateBooking(MakeBooking(1, 0, 60), admin);
+    ASSERT_TRUE(id1);
+
+    auto id2 = mgr.CreateBooking(MakeBooking(1, 2, 62), user);
+    EXPECT_FALSE(id2);
+}
+
+TEST(Strategy, QuorumAllowsWithEnoughAttendees) {
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
+
+    TBookingManager mgr(repo, storage, std::make_shared<TQuorumStrategy>(2));
+    auto u = NormalUser();
+
+    mgr.CreateBooking(MakeBooking(1, 0, 60), u);
+
+    TBooking b = MakeBooking(1, 0, 60);
+    b.Attendees = {1, 2};
+
+    auto id2 = mgr.CreateBooking(b, u);
+    EXPECT_TRUE(id2.has_value());
+}
+
+TEST(Strategy, QuorumRejectsWithoutEnoughAttendees) {
+    auto storage = std::make_shared<TMemoryStorage>();
+    auto repo = std::make_shared<TRepository>(storage);
+
+    TBookingManager mgr(repo, storage, std::make_shared<TQuorumStrategy>(3));
+    auto u = NormalUser();
+
+    mgr.CreateBooking(MakeBooking(1, 0, 60), u);
+
+    TBooking b = MakeBooking(1, 0, 60);
+    b.Attendees = {1};
+
+    auto id2 = mgr.CreateBooking(b, u);
+    EXPECT_FALSE(id2);
 }

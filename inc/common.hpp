@@ -57,15 +57,6 @@ struct TCreateRequest {
     TUser Actor;
 };
 
-struct TChangeRequest {
-    BookingId Id;
-    std::optional<std::string> Title;
-    std::optional<std::string> Description;
-    std::optional<std::chrono::system_clock::time_point> Start;
-    std::optional<std::chrono::system_clock::time_point> End;
-    TUser Actor;
-};
-
 namespace NBooking {
 
     inline void ToJSON(json& j, TBooking const& b) {

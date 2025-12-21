@@ -10,8 +10,8 @@ using namespace NBooking;
 int main() {
     auto storage = std::make_shared<TMemoryStorage>();
     auto repo = std::make_shared<TRepository>(storage);
-    auto strategy = std::make_shared<TRejectStrategy>();
-    // auto strategy = std::make_shared<TPreemptStrategy>();
+    // auto strategy = std::make_shared<TRejectStrategy>();
+    auto strategy = std::make_shared<TPreemptStrategy>();
     // auto strategy = std::make_shared<TQuorumStrategy>(3);
 
     TBookingManager mgr(repo, storage, strategy);
